@@ -1,8 +1,10 @@
+from mimetypes import init
 import numpy as np
 import pandas as pd
 from math import sin, ceil, floor
 from typing import Tuple
 import random
+from tqdm import tqdm
 # from .LinReg import LinReg
 
 
@@ -155,6 +157,23 @@ def sine(x) -> float:
 
     scaling_factor = 2 ** (7 - len(x))
     return sin(s * scaling_factor)
+
+
+def sga(generations, pop_size, bitstring_length, fitness_func, mutation_chance):
+    # initialize stuff
+    initial_pop = generate_pop(pop_size, bitstring_length)
+    pop = initial_pop.copy()
+    # main loop
+    n_parents = ceil(pop_size * 0.3) * 2
+    for gen in range(generations):
+        parents = parent_selection(pop, n_parents, fitness_func)
+        offspring = breed_parents(parents, mutation_chance)
+        pop = survivor_selection(parents, offspring, pop_size, fitness_func)
+        # Evaluate and/or save result
+
+    # end stuff
+    
+    # maybe return something
 
 
 if __name__ == '__main__':
