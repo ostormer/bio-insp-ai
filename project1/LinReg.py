@@ -1,12 +1,11 @@
-
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import PolynomialFeatures
+# from sklearn.neighbors import KNeighborsClassifier
+# from sklearn.preprocessing import PolynomialFeatures
 from math import sqrt
-import random
+# import random
 
 
 class LinReg():

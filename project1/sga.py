@@ -1,9 +1,10 @@
-from mimetypes import init
+from audioop import lin2adpcm
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import random
 from math import sin, ceil, floor
 from typing import Tuple
-import random
 from tqdm import tqdm
 # from .LinReg import LinReg
 
@@ -30,9 +31,10 @@ def find_fitness_prob(pop, fitness_func, maximize=True) -> np.ndarray:
     """
     fitness = np.array([fitness_func(ind) for ind in pop])
     min_fitness = np.min(fitness)
-
-    # Linearly rescale fitness to range [0, max-min]
-    fitness_scaled = fitness - min_fitness
+    # Epsilon > 0 so that every individual has a small chance of being chosen
+    eps = 1 / len(pop) * 1e-6
+    # Linearly rescale fitness to range [eps, max-min+eps]
+    fitness_scaled = fitness - min_fitness + eps
     s = np.sum(fitness_scaled)
     fitness_prob = fitness_scaled / s
     # Flip it if it should minimize fitness instead of maximizing
@@ -78,7 +80,7 @@ def flip_bit(n) -> int:
     return 1 if n == 0 else 0
 
 
-def crossover(parent_a, parent_b, mutation_chance) -> Tuple[np.ndarray, np.ndarray]:
+def uniform_crossover(parent_a, parent_b, mutation_chance) -> Tuple[np.ndarray, np.ndarray]:
     """generates two offspring from two parents
     using uniform crossover and mutation
 
@@ -118,8 +120,7 @@ def breed_parents(parents, mutation_chance) -> np.ndarray:
     np.random.shuffle(shuffled)
     children = []
     for i in range(0, len(shuffled), 2):
-        print(i)
-        children.extend(crossover(shuffled[i], shuffled[i+1], mutation_chance))
+        children.extend(uniform_crossover(shuffled[i], shuffled[i+1], mutation_chance))
     return np.array(children)
 
 
@@ -136,9 +137,25 @@ def survivor_selection(parents, offspring, pop_size, fitness_func, maximize=True
         parents.shape[0], size=n_parents, p=parents_prob, replace=False)]
     offspring_survivors = offspring[np.random.choice(
         offspring.shape[0], size=n_offspring, p=offspring_prob, replace=False)]
-    # TODO: Check axis of concat
-    survivors = np.concatenate(parents_survivors, offspring_survivors, axis=0)
+
+    survivors = np.concatenate((parents_survivors, offspring_survivors), axis=0)
     return survivors
+
+
+def bitstring_to_num(x) -> np.ndarray:
+    """Converts bitstring x into number in range [0, 128]
+    Args:
+        x (numpy array): bitstring
+
+    Returns:
+        float: real value of bitstring in range [0, 128]
+    """
+    s = 0
+    for i, bit in enumerate(x):
+        s += bit * (2 ** (len(x) - 1 - i))
+
+    scaling_factor = 2 ** (7 - len(x))
+    return s * scaling_factor
 
 
 def sine(x) -> float:
@@ -151,12 +168,14 @@ def sine(x) -> float:
     Returns:
         float: sine of bitstring
     """
-    s = 0
-    for i, bit in enumerate(x):
-        s += bit * (2 ** (len(x) - 1 - i))
+    return sin(bitstring_to_num(x))
 
-    scaling_factor = 2 ** (7 - len(x))
-    return sin(s * scaling_factor)
+
+def sine_restricted(x) -> float:
+    real = bitstring_to_num(x)
+    if 5 < real < 10:
+        return sin(real)
+    return -2
 
 
 def sga(generations, pop_size, bitstring_length, fitness_func, mutation_chance):
@@ -165,15 +184,42 @@ def sga(generations, pop_size, bitstring_length, fitness_func, mutation_chance):
     pop = initial_pop.copy()
     # main loop
     n_parents = ceil(pop_size * 0.3) * 2
-    for gen in range(generations):
+    for gen in tqdm(range(generations)):
         parents = parent_selection(pop, n_parents, fitness_func)
         offspring = breed_parents(parents, mutation_chance)
         pop = survivor_selection(parents, offspring, pop_size, fitness_func)
         # Evaluate and/or save result
-
+        if gen in [0, 10, 20, 99, 299, 499]:
+            # for bitstring in pop[np.random.choice(len(pop), 10, replace=False)]:
+            #     print(bitstring, sine(bitstring))
+            plot_sine_pop(pop, gen)
     # end stuff
-    
+
     # maybe return something
+
+
+def plot_sine_pop(pop, generation) -> None:
+
+    x = [bitstring_to_num(ind) for ind in pop]
+    y = [sine(n) for n in pop]
+    sine_x = np.linspace(0, 128, 1000)
+    plt.plot(sine_x, [sin(a) for a in sine_x], "r-")
+    plt.plot(x, y, "o")
+    plt.xlim(0, 128)
+    plt.ylim(-1.2, 1.2)
+    plt.xticks(list(range(0, 129, 16)))
+    plt.yticks([-1, 0, 1])
+    plt.title("Generation {:03d}".format(generation))
+    plt.savefig("sine_gen_{:03d}.png".format(generation))
+    plt.close()
+
+
+def plot_animation(pop_list, generation_list) -> None:
+    fig = plt.figure(figsize=(16, 9))
+    ax = fig.add_axes([0, 0, 1, 1], frameon=True)
+    ax.set_xlim(0, 128), ax.set_xticks(list(range(0, 129, 16)))
+    ax.set_ylim(-1.2, 1.2), ax.set_yticks([-1, 0, 1])
+    fig.show()
 
 
 if __name__ == '__main__':
@@ -181,22 +227,6 @@ if __name__ == '__main__':
     data = data_df.values
     n_features = data.shape[1]
 
-    pop = generate_pop(40, 15)
-    c1, c2 = crossover(pop[0], pop[1], 0.1)
-    print("parents       children")
-    print(pop[0], c1)
-    print(pop[1], c2)
-    print(sine(pop[0]))
 
-    parents = parent_selection(pop, 20, sine)
-    for ind in pop:
-        print(ind, sine(ind))
+    sga(500, 1000, 50, sine_restricted, 0.005)
 
-    print()
-    for ind in parents:
-        print(ind, sine(ind))
-    print()
-
-    offspring = breed_parents(parents, 0.1)
-    for ind in offspring:
-        print(ind, sine(ind))
