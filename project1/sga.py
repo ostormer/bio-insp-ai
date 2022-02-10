@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from math import sin
+from math import sin, ceil, floor
 from typing import Tuple
 import random
 # from .LinReg import LinReg
@@ -116,8 +116,15 @@ def survivor_selection(parents, offspring, pop_size) -> np.ndarray:
     # Implement elitism?
     # How many parents to keep?
     # Choose parents for breeding wih replacement?
-
-
+    n_parents = floor(pop_size / 2)
+    n_offspring = pop_size - n_parents
+    parents_survivors = parents[np.random.choice(
+        parents.shape[0], size=n_parents, p=parents_prob, replace=False)]
+    offspring_survivors = offspring[np.random.choice(
+        offspring.shape[0], size=n_offspring, p=offspring_prob, replace=False)]
+    # TODO: Check axis of concat
+    survivors = np.concatenate(parents_survivors, offspring_survivors)
+    return survivors
 
 def sine(x) -> float:
     """Converts bitstring x into number in range [0, 128]
