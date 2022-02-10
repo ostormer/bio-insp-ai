@@ -5,11 +5,6 @@ from typing import Tuple
 import random
 # from .LinReg import LinReg
 
-data_df = pd.read_csv("data.csv")
-data = data_df.values
-print(data.shape)
-n_features = data.shape[1]
-
 
 def generate_pop(n_individuals, bitstring_length) -> np.ndarray:
     pop = []
@@ -18,42 +13,51 @@ def generate_pop(n_individuals, bitstring_length) -> np.ndarray:
     return np.array(pop)
 
 
-def parent_selection(pop, n_selected, fitness_func, maximize=True):
+def find_fitness_prob(pop, fitness_func, maximize=True) -> np.ndarray:
+    """Finds probability of selecting each individual
+     based on linearly transforming fitness
+
+    Args:
+        pop (np.ndarray): population of bitstrings
+        fitness_func (function): fitness function to evaluate each bitstring
+        maximize (bool, optional): Whether to maximize fitness.
+            Minimizes if false. Defaults to True.
+
+    Returns:
+        np.ndarray: 1d array of probabilities
+    """
+    fitness = np.array([fitness_func(ind) for ind in pop])
+    min_fitness = np.min(fitness)
+
+    # Linearly rescale fitness to range [0, max-min]
+    fitness_scaled = fitness - min_fitness
+    s = np.sum(fitness_scaled)
+    fitness_prob = fitness_scaled / s
+    # Flip it if it should minimize fitness instead of maximizing
+    if not maximize:
+        fitness_prob = 1 - fitness_prob
+    # TODO: Remove commented prints
+    # for ind, fit, prob in zip(pop, fitness, fitness_prob):
+    #     print(ind, fit, prob)
+    return fitness_prob
+
+
+def parent_selection(pop, n_selected, fitness_func, maximize=True) -> np.ndarray:
     """select parents from pop based on fitness_func
 
     Args:
         pop (np.ndarray): population, array of bitstrings
         n_selected (int): number of population to select as parents (0, 1)
-        fitness_func (function): fitness function used to evaluate fitness of each individual. fitness_func(bitstring) -> fitness
-        maximize (bool, optional): True if fitness function should be maximized. Minimizes if False. Defaults to True.
+        fitness_func (function): fitness function used to evaluate fitness
+            of each individual. fitness_func(bitstring) -> fitness
+        maximize (bool, optional): True if fitness function should be
+            maximized. Minimizes if False. Defaults to True.
     """
-    fitness = []
-    min_fitness = float('inf')
-    max_fitness = float('-inf')
-    for individual in pop:
-        # Save each indivividual's fitness
-        fitness.append(fitness_func(individual))
-        # Update min and max values for later scaling
-        if fitness[-1] < min_fitness:
-            min_fitness = fitness[-1]
-        if fitness[-1] > max_fitness:
-            max_fitness = fitness[-1]
-
-    # Linearly rescale fitness to range [0, max-min]
-    s = 0
-    for i in range(len(pop)):
-        fitness[i] = fitness[i] - min_fitness
-        s += fitness[i]
-
-    pop_prob = []
-    # Rescale fitness to probabilities
-    for i in range(len(pop)):
-        pop_prob.append(fitness[i] / s)
-
-    print(sum(pop_prob))
+    pop_prob = find_fitness_prob(pop, fitness_func, maximize=maximize)
 
     # select n_selected parents from pop
-    parents = np.random.choice(pop, size=n_selected, p=pop_prob)
+    parents = pop[np.random.choice(
+        pop.shape[0], size=n_selected, p=pop_prob, replace=False)]
 
     return parents
 
@@ -72,6 +76,18 @@ def flip_bit(n) -> int:
 
 
 def crossover(parent_a, parent_b, mutation_chance) -> Tuple[np.ndarray, np.ndarray]:
+    """generates two offspring from two parents
+    using uniform crossover and mutation
+
+    Args:
+        parent_a (np.ndarray): first parent
+        parent_b (np.ndarray): second parent
+        mutation_chance (float): chance of mutating,
+            applied to children's every bit
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: two children
+    """
     child_a = np.zeros_like(parent_a)
     child_b = np.zeros_like(parent_a)
     # Uniform crossover, 50/50 chance
@@ -94,8 +110,18 @@ def crossover(parent_a, parent_b, mutation_chance) -> Tuple[np.ndarray, np.ndarr
     return child_a, child_b
 
 
+def survivor_selection(parents, offspring, pop_size) -> np.ndarray:
+    parents_prob = find_fitness_prob(parents)
+    offspring_prob = find_fitness_prob(offspring)
+    # Implement elitism?
+    # How many parents to keep?
+    # Choose parents for breeding wih replacement?
+
+
+
 def sine(x) -> float:
-    """Converts bitstring x into number in range [0, 128] and returns sine of that number
+    """Converts bitstring x into number in range [0, 128]
+        and returns sine of that number
 
     Args:
         x (numpy array): bitstring
@@ -112,5 +138,21 @@ def sine(x) -> float:
 
 
 if __name__ == '__main__':
-    pop = generate_pop(20, 4)
-    print(sine(np.array([1, 0, 1, 1, 1, 1, 1])))
+    data_df = pd.read_csv("data.csv")
+    data = data_df.values
+    n_features = data.shape[1]
+
+    pop = generate_pop(20, 6)
+    c1, c2 = crossover(pop[0], pop[1], 0.1)
+    print("parents       children")
+    print(pop[0], c1)
+    print(pop[1], c2)
+    print(sine(pop[0]))
+
+    parents = parent_selection(pop, 10, sine)
+    for ind in pop:
+        print(ind, sine(ind))
+
+    print()
+    for ind in parents:
+        print(ind, sine(ind))
