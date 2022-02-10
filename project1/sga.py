@@ -53,6 +53,7 @@ def parent_selection(pop, n_selected, fitness_func, maximize=True) -> np.ndarray
         maximize (bool, optional): True if fitness function should be
             maximized. Minimizes if False. Defaults to True.
     """
+    assert n_selected % 2 == 0, "n_selected is odd. Need to select even number of parents."
     pop_prob = find_fitness_prob(pop, fitness_func, maximize=maximize)
 
     # select n_selected parents from pop
@@ -110,21 +111,33 @@ def crossover(parent_a, parent_b, mutation_chance) -> Tuple[np.ndarray, np.ndarr
     return child_a, child_b
 
 
-def survivor_selection(parents, offspring, pop_size) -> np.ndarray:
-    parents_prob = find_fitness_prob(parents)
-    offspring_prob = find_fitness_prob(offspring)
+def breed_parents(parents, mutation_chance) -> np.ndarray:
+    shuffled = parents.copy()
+    np.random.shuffle(shuffled)
+    children = []
+    for i in range(0, len(shuffled), 2):
+        print(i)
+        children.extend(crossover(shuffled[i], shuffled[i+1], mutation_chance))
+    return np.array(children)
+
+
+def survivor_selection(parents, offspring, pop_size, fitness_func, maximize=True) -> np.ndarray:
+    parents_prob = find_fitness_prob(parents, fitness_func, maximize=maximize)
+    offspring_prob = find_fitness_prob(
+        offspring, fitness_func, maximize=maximize)
     # Implement elitism?
     # How many parents to keep?
     # Choose parents for breeding wih replacement?
-    n_parents = floor(pop_size / 2)
+    n_parents = floor(pop_size / 2)  # kill half, replace with offspring
     n_offspring = pop_size - n_parents
     parents_survivors = parents[np.random.choice(
         parents.shape[0], size=n_parents, p=parents_prob, replace=False)]
     offspring_survivors = offspring[np.random.choice(
         offspring.shape[0], size=n_offspring, p=offspring_prob, replace=False)]
     # TODO: Check axis of concat
-    survivors = np.concatenate(parents_survivors, offspring_survivors)
+    survivors = np.concatenate(parents_survivors, offspring_survivors, axis=0)
     return survivors
+
 
 def sine(x) -> float:
     """Converts bitstring x into number in range [0, 128]
@@ -149,17 +162,22 @@ if __name__ == '__main__':
     data = data_df.values
     n_features = data.shape[1]
 
-    pop = generate_pop(20, 6)
+    pop = generate_pop(40, 15)
     c1, c2 = crossover(pop[0], pop[1], 0.1)
     print("parents       children")
     print(pop[0], c1)
     print(pop[1], c2)
     print(sine(pop[0]))
 
-    parents = parent_selection(pop, 10, sine)
+    parents = parent_selection(pop, 20, sine)
     for ind in pop:
         print(ind, sine(ind))
 
     print()
     for ind in parents:
+        print(ind, sine(ind))
+    print()
+
+    offspring = breed_parents(parents, 0.1)
+    for ind in offspring:
         print(ind, sine(ind))
