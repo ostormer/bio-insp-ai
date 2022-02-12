@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 from SGA import sga
 from math import sin
@@ -37,7 +38,7 @@ def sine(x) -> float:
 
 def sine_restricted(x) -> float:
     real = bitstring_to_num(x)
-    if 5 < real < 10:
+    if 5 <= real <= 10:
         return sin(real)
     return -2
 
@@ -59,8 +60,14 @@ def plot_sine_pop(pop, generation) -> None:
 
 
 if __name__ == '__main__':
-    # data_df = pd.read_csv("data.csv")
-    # data = data_df.values
-    # n_features = data.shape[1]
+    if len(sys.argv) == 1:
+        hist, fitness = sga(500, 1000, 50, sine, 0.005)
+    elif sys.argv[1] == "restricted":
+        print("Running while restricting solution to [5, 10]")
+        hist, fitness = sga(100, 1000, 50, sine_restricted, 0.005)
+    else:
+        exit(1)
 
-    sga(500, 1000, 50, sine_restricted, 0.005)
+    for gen in [0, 1, 10, 99]:
+        print(fitness[gen])
+        plot_sine_pop(hist[gen], gen)

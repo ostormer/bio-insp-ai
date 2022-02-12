@@ -32,11 +32,11 @@ def find_fitness_prob(pop, fitness_func, maximize=True) -> np.ndarray:
     eps = 1 / len(pop) * 1e-6
     # Linearly rescale fitness to range [eps, max-min+eps]
     fitness_scaled = fitness - min_fitness + eps
-    s = np.sum(fitness_scaled)
-    fitness_prob = fitness_scaled / s
     # Flip it if it should minimize fitness instead of maximizing
     if not maximize:
-        fitness_prob = 1 - fitness_prob
+        fitness_scaled = -fitness_scaled
+    s = np.sum(fitness_scaled)
+    fitness_prob = fitness_scaled / s
     return fitness_prob
 
 
@@ -56,7 +56,8 @@ def parent_selection(
         maximize (bool, optional): True if fitness function should be
             maximized. Minimizes if False. Defaults to True.
     """
-    assert n_selected % 2 == 0, "n_selected is odd. Need to select even number of parents."
+    assert n_selected % 2 == 0, \
+        "n_selected is odd. Need to select even number of parents."
     pop_prob = find_fitness_prob(pop, fitness_func, maximize=maximize)
 
     # select n_selected parents from pop
@@ -173,23 +174,34 @@ def sga(
     pop_size,
     bitstring_length,
     fitness_func,
-    mutation_chance
+    mutation_chance,
+    maximize_fitness=True,
 ) -> None:
     # initialize stuff
     pop = generate_pop(pop_size, bitstring_length)
     pop_history = []
     pop_history.append(deepcopy(pop))
+    fitness_history = []
+    fitness_history.append(np.array([fitness_func(ind) for ind in pop]))
     # main loop
     n_parents = ceil(pop_size * 0.3) * 2
     print("Running Simple Genetic Algorithm for {:d} generations:".format(
         generations))
     for _ in tqdm(range(generations)):
-        parents = parent_selection(pop, n_parents, fitness_func)
+        parents = parent_selection(
+            pop, n_parents, fitness_func, maximize=maximize_fitness)
         offspring = breed_parents(parents, mutation_chance)
-        pop = survivor_selection(parents, offspring, pop_size, fitness_func)
+        pop = survivor_selection(
+            parents,
+            offspring,
+            pop_size,
+            fitness_func,
+            maximize=maximize_fitness
+        )
+        fitness_history.append(np.array([fitness_func(ind) for ind in pop]))
         pop_history.append(deepcopy(pop))  # Save a copy of pop
 
     # end stuff
 
     # maybe return something
-    return pop_history
+    return pop_history, fitness_history

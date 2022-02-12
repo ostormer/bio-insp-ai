@@ -33,7 +33,7 @@ class LinReg():
         # Function to filter data based on a bitstring
         indexes = []
         for i, s in enumerate(bitstring):
-            if s == '0':
+            if s == 0:  # Had to change this from string to int
                 indexes.append(i)
         arr = np.asarray(x)
         arr = np.delete(arr, indexes, axis=1)
