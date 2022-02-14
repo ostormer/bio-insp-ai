@@ -40,7 +40,7 @@ def find_fitness_prob(pop, fitness_func, maximize_fitness=True) -> np.ndarray:
     else:
         # Flip it if it should minimize fitness instead of maximizing
         fitness_scaled = max_fitness - fitness + eps
-    
+
     s = np.sum(fitness_scaled)
     fitness_prob = fitness_scaled / s
     return fitness_prob
@@ -221,12 +221,13 @@ def sga(
     mutation_chance,
     maximize_fitness=True,
     breed_with_replacement=False,
+    crowding=False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Simple Genetic Algorithm
 
     Args:
         generations (int): number of generations
-        pop_size (int): population size
+        pop_size (int): population size, must be even
         bitstring_length (int): length of bitstring per individual
         fitness_func (function): Fitness function
         mutation_chance (float): mutation chance in interval (0, 1)
@@ -239,6 +240,7 @@ def sga(
         Tuple[np.ndarray, np.ndarray]: pop_hist, fitness_hist
     """
     # initialize stuff
+    assert pop_size % 2 == 0
     pop = generate_pop(pop_size, bitstring_length)
     pop_history = []
     pop_history.append(deepcopy(pop))
@@ -251,33 +253,92 @@ def sga(
         generations))
     for _ in tqdm(range(generations)):
         parents = pop
-        if not breed_with_replacement:
-            parents = parent_selection(pop, n_parents, fitness_func,
-                                       maximize_fitness=maximize_fitness)
-            offspring = breed_all_parents(parents, mutation_chance)
-        else:
-            offspring = breed_parents_with_replacement(
-                pop,
+        if not crowding:
+            if not breed_with_replacement:
+                parents = parent_selection(pop, n_parents, fitness_func,
+                                           maximize_fitness=maximize_fitness)
+                offspring = breed_all_parents(parents, mutation_chance)
+            else:
+                offspring = breed_parents_with_replacement(
+                    pop,
+                    fitness_func,
+                    n_offspring=pop_size,
+                    mutation_chance=mutation_chance,
+                    maximize_fitness=maximize_fitness
+                )
+            pop = survivor_selection(
+                parents,
+                offspring,
+                pop_size,
                 fitness_func,
-                n_offspring=pop_size,
-                mutation_chance=mutation_chance,
                 maximize_fitness=maximize_fitness
             )
-        pop = survivor_selection(
-            parents,
-            offspring,
-            pop_size,
-            fitness_func,
-            maximize_fitness=maximize_fitness
-        )
-        fitness_history.append(np.array([fitness_func(ind) for ind in pop]))
+            fitness_history.append(
+                np.array([fitness_func(ind) for ind in pop]))
+        else:
+            # Deterministic crowding
+            # Two parents selected at random without replacement,
+            # Fitness evaluation only in child vs parent competition
+            np.random.shuffle(parents)
+            survivors = []
+            survivors_fitness = []
+            max_fit = 1 if maximize_fitness else -1
+            for i in range(pop_size // 2):
+                p1 = parents[i]
+                p2 = parents[i + 1]
+                c1, c2 = uniform_crossover(p1, p2, mutation_chance)
+                # Compute hamming distances of both possible p+c pairings
+                dist_same = np.count_nonzero(
+                    p1 != c1) + np.count_nonzero(p2 != c2)
+                dist_cross = np.count_nonzero(
+                    p1 != c2) + np.count_nonzero(p2 != c1)
+                # Parent-child tournament. Each parent competes against its
+                # "closest" child. (Both parents and both children competes
+                # once, the pairing with smallest total distance is chosen)
+                fp1 = fitness_func(p1)
+                fp2 = fitness_func(p2)
+                fc1 = fitness_func(c1)
+                fc2 = fitness_func(c2)
+                if dist_same < dist_cross:
+                    # p1 vs c1
+                    if max_fit * fp1 > max_fit * fc1:
+                        survivors.append(p1)
+                        survivors_fitness.append(fp1)
+                    else:
+                        survivors.append(c1)
+                        survivors_fitness.append(fc1)
+                    # p2 vs c2
+                    if max_fit * fp2 > max_fit * fc2:
+                        survivors.append(p2)
+                        survivors_fitness.append(fp2)
+                    else:
+                        survivors.append(c2)
+                        survivors_fitness.append(fc2)
+                else:
+                    # p1 vs c2
+                    if max_fit * fp1 > max_fit * fc2:
+                        survivors.append(p1)
+                        survivors_fitness.append(fp1)
+                    else:
+                        survivors.append(c2)
+                        survivors_fitness.append(fc2)
+                    # p2 vs c1
+                    if max_fit * fp2 > max_fit * fc1:
+                        survivors.append(p2)
+                        survivors_fitness.append(fp2)
+                    else:
+                        survivors.append(c1)
+                        survivors_fitness.append(fc1)
+            fitness_history.append(np.array(survivors_fitness))
+            pop = np.array(survivors)
+
         pop_history.append(deepcopy(pop))  # Save a copy of pop
 
     # end stuff
     return pop_history, fitness_history
 
 
-def fitness_bar_plot(fitness_hist):
+def fitness_box_plot(fitness_hist):
     """plot and show a box plot of each generation's fitness
 
     Args:
@@ -288,12 +349,6 @@ def fitness_bar_plot(fitness_hist):
     fitness_df = pd.DataFrame()
     for gen, pop_fitness in enumerate(fitness_hist):
         fitness_df[gen] = pop_fitness
-        # for ind_fitness in pop_fitness:
-        #     new_row = pd.Series({"fitness": ind_fitness, "gen": gen})
-        #     fitness_df = pd.concat((fitness_df, new_row),
-        #                            axis='index')
-    fitness_df.info()
-    print(fitness_df.head())
 
     sns.boxplot(data=fitness_df)
     plt.show()

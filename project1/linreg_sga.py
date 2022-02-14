@@ -1,14 +1,18 @@
-import numpy as np
 import pandas as pd
 # import matplotlib.pyplot as plt
 import pickle
 
-from SGA import sga, generate_pop, fitness_bar_plot
+from SGA import sga, fitness_box_plot
 from LinReg import LinReg
 
 
 def generate_fitness_func():
+    """generates fitness function for selecting parameters
+        and evaluating linreg on dataset
 
+    Returns:
+        function: The callable fitness function
+    """
     linreg = LinReg()
     data_df = pd.read_csv("data.csv")
     data = data_df.values[:, :-1]
@@ -24,22 +28,14 @@ def generate_fitness_func():
 
 if __name__ == '__main__':
     fitness_func = generate_fitness_func()
-    test_strings = generate_pop(3, 101)
-    for bitstring in test_strings:
-        print(bitstring)
-        print(fitness_func(bitstring))
-    hist, fitness = sga(50, 200, 101, fitness_func, mutation_chance=0.01,
-                        maximize_fitness=False, breed_with_replacement=True)
+
+    hist, fitness = sga(100, 100, 101, fitness_func, mutation_chance=0.01,
+                        maximize_fitness=False, crowding=True)
 
     # with open("linreg_hist.pickle", "rb") as fid:
     #     hist, fitness = pickle.load(fid)
 
-    fitness_bar_plot(fitness)
-
-    # for gen in [0, 1, 10, 49]:
-    #     print(fitness[gen])
-    #     print(np.array([np.sum(bitstring) for bitstring in hist[gen]]))
-    #     print()
+    fitness_box_plot(fitness)
 
     with open("linreg_hist.pickle", 'wb') as fid:
         pickle.dump((hist, fitness), fid)

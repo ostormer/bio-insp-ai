@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
-from SGA import sga
+from SGA import sga, fitness_box_plot
 from math import sin
 
 
@@ -61,13 +61,15 @@ def plot_sine_pop(pop, generation) -> None:
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        hist, fitness = sga(500, 1000, 50, sine, 0.005)
+        hist, fitness = sga(200, 1000, 50, sine, 0.005,
+                            maximize_fitness=True, crowding=True)
     elif sys.argv[1] == "restricted":
         print("Running while restricting solution to [5, 10]")
-        hist, fitness = sga(100, 1000, 50, sine_restricted, 0.005)
+        hist, fitness = sga(100, 1000, 50, sine_restricted, 0.005,
+                            maximize_fitness=True, crowding=True)
     else:
         exit(1)
 
-    for gen in [0, 1, 10, 99]:
-        print(fitness[gen])
+    for gen in [0, 50, 100, 199]:
         plot_sine_pop(hist[gen], gen)
+    fitness_box_plot(fitness)
