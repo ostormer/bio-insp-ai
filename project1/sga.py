@@ -1,5 +1,8 @@
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import random
+import matplotlib.pyplot as plt
 from typing import Tuple
 from tqdm import tqdm
 from math import floor, ceil
@@ -13,7 +16,7 @@ def generate_pop(n_individuals, bitstring_length) -> np.ndarray:
     return np.array(pop)
 
 
-def find_fitness_prob(pop, fitness_func, maximize=True) -> np.ndarray:
+def find_fitness_prob(pop, fitness_func, maximize_fitness=True) -> np.ndarray:
     """Finds probability of selecting each individual
      based on linearly transforming fitness
 
@@ -28,13 +31,16 @@ def find_fitness_prob(pop, fitness_func, maximize=True) -> np.ndarray:
     """
     fitness = np.array([fitness_func(ind) for ind in pop])
     min_fitness = np.min(fitness)
+    max_fitness = np.max(fitness)
     # Epsilon > 0 so that every individual has a small chance of being chosen
     eps = 1 / len(pop) * 1e-6
     # Linearly rescale fitness to range [eps, max-min+eps]
-    fitness_scaled = fitness - min_fitness + eps
-    # Flip it if it should minimize fitness instead of maximizing
-    if not maximize:
-        fitness_scaled = -fitness_scaled
+    if maximize_fitness:
+        fitness_scaled = fitness - min_fitness + eps
+    else:
+        # Flip it if it should minimize fitness instead of maximizing
+        fitness_scaled = max_fitness - fitness + eps
+    
     s = np.sum(fitness_scaled)
     fitness_prob = fitness_scaled / s
     return fitness_prob
@@ -44,7 +50,7 @@ def parent_selection(
     pop,
     n_selected,
     fitness_func,
-    maximize=True
+    maximize_fitness=True
 ) -> np.ndarray:
     """select parents from pop based on fitness_func
 
@@ -58,7 +64,8 @@ def parent_selection(
     """
     assert n_selected % 2 == 0, \
         "n_selected is odd. Need to select even number of parents."
-    pop_prob = find_fitness_prob(pop, fitness_func, maximize=maximize)
+    pop_prob = find_fitness_prob(
+        pop, fitness_func, maximize_fitness=maximize_fitness)
 
     # select n_selected parents from pop
     parents = pop[np.random.choice(
@@ -101,7 +108,9 @@ def uniform_crossover(
     child_b = np.zeros_like(parent_a)
     # Uniform crossover, 50/50 chance
     exchange_bits = np.random.randint(2, size=parent_a.shape)
-    for i, (a, b, exchange) in enumerate(zip(parent_a, parent_b, exchange_bits)):
+    for i, (a, b, exchange) in enumerate(
+        zip(parent_a, parent_b, exchange_bits)
+    ):
         if exchange:
             child_a[i] = b
             child_b[i] = a
@@ -119,7 +128,7 @@ def uniform_crossover(
     return child_a, child_b
 
 
-def breed_parents(parents, mutation_chance) -> np.ndarray:
+def breed_all_parents(parents, mutation_chance) -> np.ndarray:
     shuffled = parents.copy()
     np.random.shuffle(shuffled)
     children = []
@@ -129,20 +138,55 @@ def breed_parents(parents, mutation_chance) -> np.ndarray:
     return np.array(children)
 
 
+def breed_parents_with_replacement(
+    pop,
+    fitness_func,
+    n_offspring,
+    mutation_chance,
+    maximize_fitness=True
+) -> np.ndarray:
+    assert n_offspring % 2 == 0
+    parents_prob = find_fitness_prob(
+        pop, fitness_func, maximize_fitness=maximize_fitness)
+    offspring = []
+    for _ in range(n_offspring // 2):
+        parents = pop[np.random.choice(
+            pop.shape[0], size=2, p=parents_prob, replace=True)]
+        offspring.extend(uniform_crossover(
+            parents[0], parents[1], mutation_chance))
+    return np.array(offspring)
+
+
 def survivor_selection(
     parents, offspring,
     pop_size,
     fitness_func,
-    maximize=True
+    maximize_fitness=True
 ) -> np.ndarray:
-    parents_prob = find_fitness_prob(parents, fitness_func, maximize=maximize)
-    offspring_prob = find_fitness_prob(
-        offspring, fitness_func, maximize=maximize)
+    """select survivors from parents and offspring
+
+    Args:
+        parents (np.ndarray): 2d array of parent bitstrings
+        offspring (np.ndarray): 2d array of offspring bitstrings
+        pop_size (int): population size
+        fitness_func (function): fitness function
+        maximize_fitness (bool, optional): Whether to maximize fitness value.
+            Defaults to True.
+
+    Returns:
+        np.ndarray: Array of survivors
+    """
     # Implement elitism?
+
+    parents_prob = find_fitness_prob(
+        parents, fitness_func, maximize_fitness=maximize_fitness)
+    offspring_prob = find_fitness_prob(
+        offspring, fitness_func, maximize_fitness=maximize_fitness)
     # How many parents to keep?
     # Choose parents for breeding wih replacement?
-    n_parents = floor(pop_size / 2)  # kill half, replace with offspring
+    n_parents = floor(pop_size * 0.4)  # kill 0.6, replace with offspring
     n_offspring = pop_size - n_parents
+    assert n_offspring <= len(offspring), "Not enough offspring generated"
     parents_survivors = parents[np.random.choice(
         parents.shape[0], size=n_parents, p=parents_prob, replace=False)]
     offspring_survivors = offspring[np.random.choice(
@@ -176,32 +220,80 @@ def sga(
     fitness_func,
     mutation_chance,
     maximize_fitness=True,
-) -> None:
+    breed_with_replacement=False,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Simple Genetic Algorithm
+
+    Args:
+        generations (int): number of generations
+        pop_size (int): population size
+        bitstring_length (int): length of bitstring per individual
+        fitness_func (function): Fitness function
+        mutation_chance (float): mutation chance in interval (0, 1)
+        maximize_fitness (bool, optional): Whether to maximize the fitness
+            function. Defaults to True.
+        breed_with_replacement (bool, optional): Whether to let single parent
+            breed multiple times per generation. Defaults to False.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: pop_hist, fitness_hist
+    """
     # initialize stuff
     pop = generate_pop(pop_size, bitstring_length)
     pop_history = []
     pop_history.append(deepcopy(pop))
     fitness_history = []
     fitness_history.append(np.array([fitness_func(ind) for ind in pop]))
-    # main loop
+
+    # number of parents to select when each parent can breed once
     n_parents = ceil(pop_size * 0.3) * 2
     print("Running Simple Genetic Algorithm for {:d} generations:".format(
         generations))
     for _ in tqdm(range(generations)):
-        parents = parent_selection(
-            pop, n_parents, fitness_func, maximize=maximize_fitness)
-        offspring = breed_parents(parents, mutation_chance)
+        parents = pop
+        if not breed_with_replacement:
+            parents = parent_selection(pop, n_parents, fitness_func,
+                                       maximize_fitness=maximize_fitness)
+            offspring = breed_all_parents(parents, mutation_chance)
+        else:
+            offspring = breed_parents_with_replacement(
+                pop,
+                fitness_func,
+                n_offspring=pop_size,
+                mutation_chance=mutation_chance,
+                maximize_fitness=maximize_fitness
+            )
         pop = survivor_selection(
             parents,
             offspring,
             pop_size,
             fitness_func,
-            maximize=maximize_fitness
+            maximize_fitness=maximize_fitness
         )
         fitness_history.append(np.array([fitness_func(ind) for ind in pop]))
         pop_history.append(deepcopy(pop))  # Save a copy of pop
 
     # end stuff
-
-    # maybe return something
     return pop_history, fitness_history
+
+
+def fitness_bar_plot(fitness_hist):
+    """plot and show a box plot of each generation's fitness
+
+    Args:
+        fitness_hist (list[np.ndarray]): List of nd.array of each
+            individual's fitness for each generation
+    """
+    sns.set_theme(style="whitegrid")
+    fitness_df = pd.DataFrame()
+    for gen, pop_fitness in enumerate(fitness_hist):
+        fitness_df[gen] = pop_fitness
+        # for ind_fitness in pop_fitness:
+        #     new_row = pd.Series({"fitness": ind_fitness, "gen": gen})
+        #     fitness_df = pd.concat((fitness_df, new_row),
+        #                            axis='index')
+    fitness_df.info()
+    print(fitness_df.head())
+
+    sns.boxplot(data=fitness_df)
+    plt.show()
