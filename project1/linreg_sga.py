@@ -33,7 +33,7 @@ if __name__ == '__main__':
                         fitness_func=fitness_func, mutation_chance=0.02,
                         maximize_fitness=False, breed_with_replacement=True,
                         crowding=False)
-
+    # 50 gens, 200 pop takes 5 min
     hist_crowding, fitness_crowding = sga(
         generations=50, pop_size=200, bitstring_length=101,
         fitness_func=fitness_func, mutation_chance=0.02,
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     fitness_box_plot(fitness_crowding)
 
     entropy_plot((hist, hist_crowding), ("SGA", "Deterministic crowding"),
-                 note="crowding_analysis")
+                 note="crowding_analysis_linreg")
 
     with open("linreg_hist.pickle", 'wb') as fid:
         pickle.dump((hist, fitness), fid)

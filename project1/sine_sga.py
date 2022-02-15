@@ -70,9 +70,9 @@ if __name__ == '__main__':
         fitness_func = sine_restricted
     else:
         exit(1)
-    hist, fitness = sga(100, 1000, 50, fitness_func, 0.005,
+    hist, fitness = sga(100, 500, 50, fitness_func, 0.005,
                         maximize_fitness=True, crowding=False)
-    hist_crowding, fitness_crowding = sga(100, 1000, 50, fitness_func, 0.008,
+    hist_crowding, fitness_crowding = sga(100, 500, 50, fitness_func, 0.005,
                                           maximize_fitness=True, crowding=True)
     for gen in [0, 1, 10, 50, 99]:
         plot_sine_pop(hist[gen], gen, note="no_crowd")
@@ -82,4 +82,4 @@ if __name__ == '__main__':
     fitness_box_plot(fitness)
 
     entropy_plot((hist, hist_crowding), names=(
-        "no crowding", "crowding"), note="crowding_analysis")
+        "no crowding", "crowding"), note="crowding_analysis_sine")

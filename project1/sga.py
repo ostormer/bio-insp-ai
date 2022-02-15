@@ -370,10 +370,18 @@ def entropy_plot(pop_histories, names, note=""):
     for pop_hist in pop_histories:
         entropies = []
         for gen in pop_hist:
-            ones_frac = np.count_nonzero(gen)/(gen.shape[0] * gen.shape[1])
-            zeros_frac = 1 - ones_frac
-            entropies.append(-(ones_frac * log2(ones_frac) +
-                             zeros_frac * log2(zeros_frac)))
+            # Per-gene entropy, i think that makes more sense.
+            entropy = 0
+            genes = np.transpose(gen)
+            for gene in genes:
+                try:
+                    p1 = np.count_nonzero(gene)/len(gene)
+                    p0 = 1 - p1
+                    entropy -= log2(p1) * p1 + log2(p0) * p0
+                except ValueError:
+                    pass  # All instances of gene are the same, entropy 0
+            entropies.append(entropy / gen.shape[1])
+
         plt.plot(entropies)
     plt.title("Entropy of runs - {:s}".format(note))
     plt.legend(names)
