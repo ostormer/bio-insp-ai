@@ -2,10 +2,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import random
+import os
 import matplotlib.pyplot as plt
 from typing import Tuple
 from tqdm import tqdm
-from math import floor, ceil
+from math import floor, ceil, log2
 from copy import deepcopy
 
 
@@ -33,14 +34,16 @@ def find_fitness_prob(pop, fitness_func, maximize_fitness=True) -> np.ndarray:
     min_fitness = np.min(fitness)
     max_fitness = np.max(fitness)
     # Epsilon > 0 so that every individual has a small chance of being chosen
-    eps = 1 / len(pop) * 1e-6
+    # eps = 1 / len(pop) * 1e-6
     # Linearly rescale fitness to range [eps, max-min+eps]
     if maximize_fitness:
-        fitness_scaled = fitness - min_fitness + eps
+        fitness_scaled = fitness - min_fitness  # + eps
     else:
         # Flip it if it should minimize fitness instead of maximizing
-        fitness_scaled = max_fitness - fitness + eps
-
+        fitness_scaled = max_fitness - fitness  # + eps
+    fitness_scaled = fitness_scaled / np.max(fitness_scaled)
+    # This exp scaling makes eps unneeded, as 0 is turned into -1**50 > 0
+    fitness_scaled = 50 ** (fitness_scaled - 1)
     s = np.sum(fitness_scaled)
     fitness_prob = fitness_scaled / s
     return fitness_prob
@@ -235,6 +238,8 @@ def sga(
             function. Defaults to True.
         breed_with_replacement (bool, optional): Whether to let single parent
             breed multiple times per generation. Defaults to False.
+        crowding (bool, optional): Whether to use deterministic crowding
+            instead of standard SGA. Defaults to False.
 
     Returns:
         Tuple[np.ndarray, np.ndarray]: pop_hist, fitness_hist
@@ -351,4 +356,26 @@ def fitness_box_plot(fitness_hist):
         fitness_df[gen] = pop_fitness
 
     sns.boxplot(data=fitness_df)
+    plt.show()
+
+
+def entropy_plot(pop_histories, names, note=""):
+    """plot, show and save plot comparing entropies of multtiple runs
+
+    Args:
+        pop_histories (list): list of lists of 2d np arrays. one entry per run
+        names (tuple): Names of runs.
+        note (str, optional): short note, used for file path. Defaults to "".
+    """
+    for pop_hist in pop_histories:
+        entropies = []
+        for gen in pop_hist:
+            ones_frac = np.count_nonzero(gen)/(gen.shape[0] * gen.shape[1])
+            zeros_frac = 1 - ones_frac
+            entropies.append(-(ones_frac * log2(ones_frac) +
+                             zeros_frac * log2(zeros_frac)))
+        plt.plot(entropies)
+    plt.title("Entropy of runs - {:s}".format(note))
+    plt.legend(names)
+    plt.savefig(os.path.join("figs", "entropy_{:s}.png".format(note)))
     plt.show()

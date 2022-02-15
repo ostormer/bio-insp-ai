@@ -2,7 +2,7 @@ import pandas as pd
 # import matplotlib.pyplot as plt
 import pickle
 
-from SGA import sga, fitness_box_plot
+from SGA import sga, fitness_box_plot, entropy_plot
 from LinReg import LinReg
 
 
@@ -28,14 +28,27 @@ def generate_fitness_func():
 
 if __name__ == '__main__':
     fitness_func = generate_fitness_func()
+    # 50 gens, 200 pop takes 10 min
+    hist, fitness = sga(generations=50, pop_size=200, bitstring_length=101,
+                        fitness_func=fitness_func, mutation_chance=0.02,
+                        maximize_fitness=False, breed_with_replacement=True,
+                        crowding=False)
 
-    hist, fitness = sga(100, 100, 101, fitness_func, mutation_chance=0.01,
-                        maximize_fitness=False, crowding=True)
-
+    hist_crowding, fitness_crowding = sga(
+        generations=50, pop_size=200, bitstring_length=101,
+        fitness_func=fitness_func, mutation_chance=0.02,
+        maximize_fitness=False, crowding=True)
     # with open("linreg_hist.pickle", "rb") as fid:
     #     hist, fitness = pickle.load(fid)
 
     fitness_box_plot(fitness)
+    fitness_box_plot(fitness_crowding)
+
+    entropy_plot((hist, hist_crowding), ("SGA", "Deterministic crowding"),
+                 note="crowding_analysis")
 
     with open("linreg_hist.pickle", 'wb') as fid:
         pickle.dump((hist, fitness), fid)
+
+    with open("linreg_hist_crowding.pickle", 'wb') as fid:
+        pickle.dump((hist_crowding, fitness_crowding), fid)
